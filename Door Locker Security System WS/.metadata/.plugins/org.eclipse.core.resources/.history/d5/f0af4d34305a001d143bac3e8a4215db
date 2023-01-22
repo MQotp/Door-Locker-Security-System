@@ -1,0 +1,15 @@
+/*
+ * ctrl_ecu.h
+ *
+ *  Created on: Oct 31, 2022
+ *      Author: Mahmoud Qotp
+ */
+
+#ifndef CTRL_ECU_H_
+#define CTRL_ECU_H_
+
+#include "std_types.h"
+
+void CTRL_ECU_init(void);
+
+#endif /* CTRL_ECU_H_ */

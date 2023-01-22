@@ -1,0 +1,11 @@
+/*
+ * buzzer.c
+ *
+ *  Created on: Oct 31, 2022
+ *      Author: Mahmoud Qotp
+ */
+
+
+#include "std_types.h"
+#include "gpio.h"
+

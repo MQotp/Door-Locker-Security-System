@@ -1,0 +1,487 @@
+/*
+ * hmi_ecu.c
+ *
+ *  Created on: Oct 28, 2022
+ *      Author: Mahmoud Qotp
+ */
+
+/*******************************************************************************
+ *                                   Includes                                  *
+ *******************************************************************************/
+#include "lcd.h"
+#include "keypad.h"
+#include "timer1.h"
+#include "std_types.h"
+#include "uart.h"
+#include <avr/io.h>
+#include "hmi_ecu.h"
+#include <util/delay.h>
+
+/*******************************************************************************
+ *                                Global Variables                             *
+ *******************************************************************************/
+uint8 pwStatus = PASSWORDS_ARE_MISMATCHED;
+uint8 g_interruptCounter = 0;
+uint8 g_matchingFlag = 0;
+uint8 j = 0;
+
+/*******************************************************************************
+ *********************************     MAIN     ********************************
+ *******************************************************************************/
+int main(void)
+{
+	HMI_ECU_init();
+	setPassword();
+	while(1)
+	{
+		/* Display main system Options */
+		LCD_clearScreen();
+		LCD_displayString("+: OPEN DOOR");
+		LCD_moveCursor(1,0);
+		LCD_displayString("-: CHANGE PW");
+
+		if(KEYPAD_getPressedKey() == '+')
+		{
+			openDoor();
+		}
+		else if(KEYPAD_getPressedKey() == '-')
+		{
+			resetPassword();
+			if(g_matchingFlag == 1)
+			{
+				setPassword();
+				g_matchingFlag = 0;
+			}
+		}
+	}
+}
+
+
+
+/*******************************************************************************
+ *                             Functions definitions                           *
+ *******************************************************************************/
+
+/*
+ * [Function Name]: HMI_ECU_init
+ * [Function Description]: This Function should initialize the HMI ECU by Initializing all the peripherals
+ * 							it depends on by:
+ * 							1- initialize LCD
+ * 							2- define structure of type Timer1_ConfigType to initialize Timer1.
+ * 							3- define structure of type UART_ConfigType to initialize UART.
+ * 							4- Setting the call back function.
+ * 							5- Enabling the interrupts.
+ *
+ * Interrupt each second.
+ * Based On The next Calculations:
+ * 		Timer Frequency = CPU Frequency / Prescaler
+ * 		Timer Instruction Time = 1 / Timer Frequency
+ * 		Total Number of Counts = (Required Time / Timer Instruction Time) - 1
+ *
+ *
+ * Inputs: No inputs.
+ * Outputs: No Outputs.
+ */
+
+void HMI_ECU_init(void)
+{
+	LCD_init();
+	Timer1_ConfigType timer_Config = {TIMER_INITIAL_VALUE,TIMER_COMPARE_VALUE,F_CPU_256,COMPARE_MODE};
+	UART_ConfigType UART_Config = {CHARACTER_SIZE_8,NO_PARITY,STOP_BIT_1,UART_BAUD_RATE};
+	UART_init(&UART_Config);
+	Timer1_setCallBack(HMI_ECU_newTimerTick);
+	Timer1_init(&timer_Config);
+	SREG = (1<<7);
+}
+
+/*
+ * [Function Name]: sendPassword
+ * [Function Description]: Function to send Array (Password) by UART.
+ *
+ *
+ * Inputs: Array of characters.
+ * Outputs: No Outputs.
+ */
+void sendPassword(uint8 *sendPassword)
+{
+	uint8 i;
+	for (i = 0; i < PASSWORD_SIZE; i++) {
+		UART_sendByte(sendPassword[i]);
+	}
+}
+
+/*
+ * [Function Name]: HMI_getPassword
+ * [Function Description]: Function to get Password from Keypad.
+ *
+ *
+ * Inputs: Array of characters.
+ * Outputs: No Outputs. (Actually it returns the change happened in the input array.
+ */
+
+/*void HMI_getPassword(uint8 *str)
+{
+	j = 0;
+	while(j < PASSWORD_SIZE)
+	{
+		LCD_moveCursor(1,j);
+		str[j] = KEYPAD_getPressedKey();
+		_delay_ms(500);
+		if(str[j] >= 0 && str[i] <= 9)
+		{
+			LCD_moveCursor(1,j);
+			LCD_displayCharacter('*');
+			j++;
+		}
+	}
+	while(KEYPAD_getPressedKey() != ENTER);
+}*/
+
+
+/*
+ * [Function Name]: setPassword
+ * [Function Description]: Function to set password of the Door Locker Security System.
+ *
+ *
+ * Inputs: No inputs (It manipulate global variables)
+ * Outputs: No Outputs. (Doesn't return any thing but it is using UART to send and receive data)
+ */
+
+void setPassword(void)
+{
+	uint8 Password[PASSWORD_SIZE] = {};
+	uint8 rePassword[PASSWORD_SIZE] = {};
+	uint8 passwordMatchStat = PASSWORDS_ARE_MISMATCHED;
+	while(passwordMatchStat != PASSWORDS_ARE_MATCHED)
+	{
+		LCD_clearScreen();
+
+		LCD_displayString("SET PASSWORD:");
+
+		j = 0;
+		while(j < PASSWORD_SIZE)
+		{
+			LCD_moveCursor(1,j);
+			Password[j] = KEYPAD_getPressedKey();
+			_delay_ms(500);
+			if(Password[j] >= 0 && Password[j] <= 9)
+			{
+				LCD_moveCursor(1,j);
+				LCD_displayCharacter('*');
+				j++;
+			}
+		}
+		while(KEYPAD_getPressedKey() != ENTER);
+
+
+		LCD_clearScreen();
+
+
+		LCD_displayString("REENTER PASSWORD");
+
+		j = 0;
+		while(j < PASSWORD_SIZE)
+		{
+			LCD_moveCursor(1,j);
+			rePassword[j] = KEYPAD_getPressedKey();
+			_delay_ms(500);
+			if(rePassword[j] >= 0 && rePassword[j] <= 9)
+			{
+				LCD_moveCursor(1,j);
+				LCD_displayCharacter('*');
+				j++;
+			}
+		}
+		while(KEYPAD_getPressedKey() != ENTER);
+
+
+		LCD_clearScreen();
+
+
+		UART_sendByte(SET_PASSWORD); /*Send Byte to inform the another ECU that you are setting password*/
+
+		while(UART_recieveByte() != READY_TO_RECEIVE);
+		sendPassword(Password);
+
+		while(UART_recieveByte() != READY_TO_RECEIVE);
+		sendPassword(rePassword);
+
+		while(UART_recieveByte() != SENDING_STATUS);
+		passwordMatchStat = UART_recieveByte();
+
+		if(passwordMatchStat == PASSWORDS_ARE_MISMATCHED)
+		{
+			LCD_clearScreen();
+			LCD_displayString("MISMATCHED.");
+			Delay(1);
+		}
+		else if(passwordMatchStat == PASSWORDS_ARE_MATCHED)
+		{
+			LCD_clearScreen();
+			LCD_displayString("PASSWORD IS SET.");
+			Delay(1);
+		}
+	}
+}
+
+
+/*
+ * [Function Name]: resetPassword
+ * [Function Description]: Function to reset password of the Door Locker Security System.
+ *
+ *
+ * Inputs: No inputs (It manipulate global variables)
+ * Outputs: No Outputs. (Doesn't return any thing but it is using UART to send and receive data)
+ */
+
+void resetPassword(void)
+{
+	uint8 checkPassword[PASSWORD_SIZE] = {};
+	UART_sendByte(CHANGE_PASSWORD);
+
+	LCD_clearScreen();
+	LCD_displayString("ENTER PASSWORD");
+
+	j = 0;
+	while(j < PASSWORD_SIZE)
+	{
+		LCD_moveCursor(1,j);
+		checkPassword[j] = KEYPAD_getPressedKey();
+		_delay_ms(500);
+		if(checkPassword[j] >= 0 && checkPassword[j] <= 9)
+		{
+			LCD_moveCursor(1,j);
+			LCD_displayCharacter('*');
+			j++;
+		}
+	}
+	while(KEYPAD_getPressedKey() != ENTER);
+
+	LCD_clearScreen();
+
+	UART_sendByte(SEND_PASSWORD);
+	sendPassword(checkPassword);
+
+	while(UART_recieveByte() != SENDING_STATUS);
+	pwStatus = UART_recieveByte();
+
+	if(pwStatus == PASSWORDS_ARE_MATCHED)
+	{
+		g_matchingFlag = 1;
+	}
+	else if(pwStatus == PASSWORDS_ARE_MISMATCHED)
+	{
+		UART_sendByte(CHANGE_PASSWORD);
+		LCD_clearScreen();
+		LCD_displayString("REENTER PASSWORD");
+
+		j = 0;
+		while(j < PASSWORD_SIZE)
+		{
+			LCD_moveCursor(1,j);
+			checkPassword[j] = KEYPAD_getPressedKey();
+			_delay_ms(500);
+			if(checkPassword[j] >= 0 && checkPassword[j] <= 9)
+			{
+				LCD_moveCursor(1,j);
+				LCD_displayCharacter('*');
+				j++;
+			}
+		}
+		while(KEYPAD_getPressedKey() != ENTER);
+
+		LCD_clearScreen();
+
+		UART_sendByte(SEND_PASSWORD);
+		UART_sendString(checkPassword);
+
+		while(UART_recieveByte() != SENDING_STATUS);
+		pwStatus = UART_recieveByte();
+
+		if(pwStatus == PASSWORDS_ARE_MATCHED)
+		{
+			g_matchingFlag = 1;
+		}
+		else if(pwStatus == PASSWORDS_ARE_MISMATCHED)
+		{
+			UART_sendByte(CHANGE_PASSWORD);
+			LCD_clearScreen();
+			LCD_displayString("REENTER PASSWORD");
+			HMI_getPassword(checkPassword);
+			LCD_clearScreen();
+
+			UART_sendByte(SEND_PASSWORD);
+			UART_sendString(checkPassword);
+
+			while(UART_recieveByte() != SENDING_STATUS);
+			pwStatus = UART_recieveByte();
+
+			if(pwStatus == PASSWORDS_ARE_MATCHED)
+			{
+				g_matchingFlag = 1;
+			}
+			else if(pwStatus == PASSWORDS_ARE_MISMATCHED)
+			{
+				/*BUZZER AND ERROR*/
+				LCD_clearScreen();
+				LCD_displayStringRowColumn(0,5,"ERROR!");
+				Delay(ERROR_DELAY);
+			}
+		}
+	}
+}
+
+
+/*
+ * [Function Name]: HMI_ECU_newTimerTick
+ * [Function Description]: Function to be called by the ISR.
+ *
+ *
+ * Inputs: No inputs.
+ * Outputs: No Outputs.
+ */
+
+void HMI_ECU_newTimerTick(void)
+{
+	g_interruptCounter++;
+}
+
+/*
+ * [Function Name]: Delay
+ * [Function Description]: Function to make delay for certain time based on the interrupt time.
+ *
+ *
+ * Inputs: Number of interrupts to be delayed with.
+ * Outputs: No Outputs.
+ */
+
+void Delay(uint8 interruptsCount)
+{
+	g_interruptCounter = 0;
+	while(g_interruptCounter < interruptsCount);
+	g_interruptCounter = 0;
+}
+
+/*
+ * [Function Name]: HMI_Open_Locker
+ * [Function Description]: Function to interact with user based on what happens in the control ECU.
+ *
+ *
+ * Inputs: No Inputs.
+ * Outputs: No Outputs.
+ */
+void HMI_Open_Locker(void)
+{
+	/* Case of Right Password */
+	LCD_clearScreen();
+	LCD_displayString("UNLOCKING");
+	Delay(MOTOR_ROTATING_TIME); /*Delay for 30 interrupts = 15 seconds*/
+	LCD_clearScreen();
+	LCD_displayString("HOLDING");
+	Delay(HOLDING_TIME);
+	LCD_clearScreen();
+	LCD_displayString("LOCKING");
+	Delay(MOTOR_ROTATING_TIME);
+}
+
+/*
+ * [Function Name]: openDoor
+ * [Function Description]: Function responsible about Opening door of the locker.
+ *
+ *
+ * Inputs: No Inputs.
+ * Outputs: No Outputs.
+ */
+void openDoor(void)
+{
+	uint8 checkPassword[PASSWORD_SIZE] = {};
+	UART_sendByte(OPEN_DOOR);
+
+	LCD_clearScreen();
+	LCD_displayString("ENTER PASSWORD");
+	HMI_getPassword(checkPassword);
+	LCD_clearScreen();
+
+	UART_sendByte(SEND_PASSWORD);
+	UART_sendString(checkPassword);
+
+	while(UART_recieveByte() != SENDING_STATUS);
+	pwStatus = UART_recieveByte();
+
+	if(pwStatus == PASSWORDS_ARE_MATCHED)
+	{
+		HMI_Open_Locker();
+	}
+	else if(pwStatus == PASSWORDS_ARE_MISMATCHED)
+	{
+		UART_sendByte(OPEN_DOOR);
+		LCD_clearScreen();
+		LCD_displayString("REENTER PASSWORD");
+		HMI_getPassword(checkPassword);
+		LCD_clearScreen();
+
+		UART_sendByte(SEND_PASSWORD);
+		UART_sendString(checkPassword);
+
+		while(UART_recieveByte() != SENDING_STATUS);
+		pwStatus = UART_recieveByte();
+
+		if(pwStatus == PASSWORDS_ARE_MATCHED)
+		{
+			HMI_Open_Locker();
+		}
+		else if(pwStatus == PASSWORDS_ARE_MISMATCHED)
+		{
+			UART_sendByte(OPEN_DOOR);
+			LCD_clearScreen();
+			LCD_displayString("REENTER PASSWORD");
+			HMI_getPassword(checkPassword);
+			LCD_clearScreen();
+
+			UART_sendByte(SEND_PASSWORD);
+			UART_sendString(checkPassword);
+
+			while(UART_recieveByte() != SENDING_STATUS);
+			pwStatus = UART_recieveByte();
+
+			if(pwStatus == PASSWORDS_ARE_MATCHED)
+			{
+				HMI_Open_Locker();
+			}
+			else if(pwStatus == PASSWORDS_ARE_MISMATCHED)
+			{
+				/*BUZZER AND ERROR*/
+				LCD_clearScreen();
+				LCD_displayStringRowColumn(0,5,"ERROR!");
+				Delay(ERROR_DELAY);
+			}
+		}
+	}
+}
+
+/*
+ * [Function Name]: HMI_mainOptions
+ * [Function Description]: Function display the main options and get the option from user to proceed.
+ *
+ *
+ * Inputs: No Inputs.
+ * Outputs: No Outputs.
+ */
+/*void HMI_mainOptions(void)
+{
+	 Display main system Options
+	LCD_clearScreen();
+	LCD_displayString("+: OPEN DOOR");
+	LCD_moveCursor(1,0);
+	LCD_displayString("-: CHANGE PW");
+
+	if(KEYPAD_getPressedKey() == '+')
+	{
+		openDoor();
+	}
+	else if(KEYPAD_getPressedKey() == '-')
+	{
+		resetPassword();
+	}
+}*/
+

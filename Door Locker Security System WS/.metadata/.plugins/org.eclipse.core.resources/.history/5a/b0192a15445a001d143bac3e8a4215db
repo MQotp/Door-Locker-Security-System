@@ -1,0 +1,66 @@
+/*
+ * ctrl_ecu.h
+ *
+ *  Created on: Oct 31, 2022
+ *      Author: Mahmoud Qotp
+ */
+
+#ifndef CTRL_ECU_H_
+#define CTRL_ECU_H_
+
+#include "std_types.h"
+
+/*******************************************************************************
+ *                                Definitions                                  *
+ *******************************************************************************/
+
+#define PASSWORD_SIZE 5
+#define PASSWORDS_ARE_MATCHED 0xE8
+#define PASSWORDS_ARE_MISMATCHED 0xE2
+#define SET_PASSWORD '%'
+#define SEND_PASSWORD '~'
+#define CHANGE_PASSWORD '-'
+#define SENDING_STATUS 0xC6
+#define READY_TO_RECEIVE '&'
+#define OPEN_DOOR '+'
+#define ENTER '='
+
+#define TIMER_INITIAL_VALUE 0
+#define TIMER_COMPARE_VALUE 15624
+#define TIMER_PRESCALER 256
+#define MOTOR_ROTATING_TIME 6
+#define HOLDING_TIME 2
+#define ERROR_DELAY 6 /*120*/
+#define MOTOR_ROTATING_TIME 6 /*30*/
+#define HOLDING_TIME 2 /* 6 */
+#define BUZZER_TIME 4 /*120*/
+#define UART_BAUD_RATE 9600
+
+#define TWI_BIT_RATE (400000UL)
+#define TWI_ADDRESS 0x01
+
+#define PASSWORD_ADDRESS 0x0200
+
+/*******************************************************************************
+ *                              Functions Prototypes                           *
+ *******************************************************************************/
+
+void CTRL_ECU_init(void);
+void CTRL_ECU_newTimerTick(void);
+void Delay(uint8 interruptsCount);
+void recievePassword(uint8 *receivedPass);
+uint8 checkPassword(uint8 *str1, uint8 *str2);
+void savePassword(void);
+void resetPassword(void);
+
+/*
+ * [Function Name]: openDoor
+ * [Function Description]: Function responsible about Opening door of the locker.
+ *
+ *
+ * Inputs: No Inputs.
+ * Outputs: No Outputs.
+ */
+void openDoor(void);
+
+#endif /* CTRL_ECU_H_ */

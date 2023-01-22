@@ -1,0 +1,110 @@
+/*
+ * hmi_ecu.h
+ *
+ *  Created on: Oct 31, 2022
+ *      Author: Mahmoud Qotp
+ */
+
+#ifndef HMI_ECU_H_
+#define HMI_ECU_H_
+
+#include "std_types.h"
+
+/*******************************************************************************
+ *                                Definitions                                  *
+ *******************************************************************************/
+
+#define PASSWORD_SIZE 5
+#define PASSWORDS_ARE_MATCHED 0xE8
+#define PASSWORDS_ARE_MISMATCHED 0xE2
+#define SET_PASSWORD '%'
+#define SEND_PASSWORD '~'
+#define CHANGE_PASSWORD '-'
+#define FALSE_PASSWORD '*'
+#define SENDING_STATUS 0xC6
+#define RECEIVE_INSTRUCTION 0xB9
+#define RESET_PASSWORD 0xD7
+#define READY_TO_RECEIVE '&'
+#define OPEN_DOOR '+'
+#define ENTER '='
+#define TIMER_INITIAL_VALUE 0
+#define TIMER_COMPARE_VALUE 15624
+#define TIMER_PRESCALER 256
+#define MOTOR_ROTATING_TIME 6
+#define HOLDING_TIME 2
+#define ERROR_DELAY 6 /*120*/
+#define UART_BAUD_RATE 9600
+
+
+/*******************************************************************************
+ *                              Functions Prototypes                           *
+ *******************************************************************************/
+
+void HMI_ECU_init(void);
+void sendPassword(uint8 *sendPassword);
+void HMI_getPassword(uint8 *str);
+void setPassword(void);
+
+/*
+ * [Function Name]: resetPassword
+ * [Function Description]: Function to reset password of the Door Locker Security System.
+ *
+ *
+ * Inputs: No inputs (It manipulate global variables)
+ * Outputs: No Outputs. (Doesn't return any thing but it is using UART to send and receive data)
+ */
+void resetPassword(void);
+
+/*
+ * [Function Name]: HMI_ECU_newTimerTick
+ * [Function Description]: Function to be called by the ISR.
+ *
+ *
+ * Inputs: No inputs.
+ * Outputs: No Outputs.
+ */
+
+void HMI_ECU_newTimerTick(void);
+
+/*
+ * [Function Name]: Delay
+ * [Function Description]: Function to make delay for certain time based on the interrupt time.
+ *
+ *
+ * Inputs: Number of interrupts to be delayed with.
+ * Outputs: No Outputs.
+ */
+void Delay(uint8 interruptsCount);
+
+/*
+ * [Function Name]: HMI_Open_Locker
+ * [Function Description]: Function to interact with user based on what happens in the control ECU.
+ *
+ *
+ * Inputs: No Inputs.
+ * Outputs: No Outputs.
+ */
+void HMI_Open_Locker(void);
+
+/*
+ * [Function Name]: openDoor
+ * [Function Description]: Function responsible about Opening door of the locker.
+ *
+ *
+ * Inputs: No Inputs.
+ * Outputs: No Outputs.
+ */
+void openDoor(void);
+
+
+/*
+ * [Function Name]: HMI_mainOptions
+ * [Function Description]: Function display the main options and get the option from user to proceed.
+ *
+ *
+ * Inputs: No Inputs.
+ * Outputs: No Outputs.
+ */
+void HMI_mainOptions(void);
+
+#endif /* HMI_ECU_H_ */

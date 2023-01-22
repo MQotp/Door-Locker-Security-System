@@ -1,0 +1,21 @@
+/*
+ * ctrl_ecu.h
+ *
+ *  Created on: Oct 31, 2022
+ *      Author: Mahmoud Qotp
+ */
+
+#ifndef CTRL_ECU_H_
+#define CTRL_ECU_H_
+
+#include "std_types.h"
+
+void CTRL_ECU_init(void);
+void CTRL_ECU_newTimerTick(void);
+void Delay(uint8 interruptsCount);
+void recievePassword(uint8 *receivedPass);
+uint8 checkPassword(uint8 *str1, uint8 *str2);
+void savePassword(void);
+void resetPassword(void);
+
+#endif /* CTRL_ECU_H_ */

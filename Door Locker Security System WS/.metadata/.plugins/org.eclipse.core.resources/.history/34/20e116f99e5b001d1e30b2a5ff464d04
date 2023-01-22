@@ -1,0 +1,151 @@
+/*
+ * ctrl_ecu.h
+ *
+ *  Created on: Oct 31, 2022
+ *      Author: Mahmoud Qotp
+ */
+
+#ifndef CTRL_ECU_H_
+#define CTRL_ECU_H_
+
+#include "std_types.h"
+
+/*******************************************************************************
+ *                                Definitions                                  *
+ *******************************************************************************/
+
+#define PASSWORD_SIZE 5
+#define PASSWORDS_ARE_MATCHED 0xE8
+#define PASSWORDS_ARE_MISMATCHED 0xE2
+#define SET_PASSWORD 0xD3
+#define SEND_PASSWORD 0xD7
+#define CHANGE_PASSWORD 0xC1
+#define SENDING_STATUS 0xC6
+#define READY_TO_RECEIVE 0xAA
+#define OPEN_DOOR 0xBB
+#define ENTER '='
+
+#define TIMER_INITIAL_VALUE 0
+#define TIMER_COMPARE_VALUE 15624
+#define TIMER_PRESCALER 256
+#define MOTOR_ROTATING_TIME 30 /*15 Sec = 30 Interrupts*/
+#define HOLDING_TIME 6 /*3 Sec = 6 Interrupts*/
+#define ERROR_DELAY 120 /*60 Sec = 120 Interrupts*/
+#define BUZZER_TIME 120 /*60 Sec = 120 Interrupts*/
+#define UART_BAUD_RATE 9600
+
+#define TWI_BIT_RATE (400000UL)
+#define TWI_ADDRESS 0x01
+
+#define PASSWORD_ADDRESS 0x0200
+
+#define F_CPU (8000000UL)
+/*******************************************************************************
+ *                              Functions Prototypes                           *
+ *******************************************************************************/
+
+/*
+ * [Function Name]: CTRL_ECU_init
+ * [Function Description]: This Function should initialize the HMI ECU by Initializing all the peripherals
+ * 							it depends on by:
+ * 							1- initialize Buzzer
+ * 							2- define structure of type Timer1_ConfigType to initialize Timer1.
+ * 							3- define structure of type UART_ConfigType to initialize UART.
+ * 							4- Setting the call back function.
+ * 							5- Initialize TWI.
+ * 							6- Initialize DC Motor
+ * 							7- Enabling the interrupts.
+ *
+ * Interrupt each half second.
+ * Based On The next Calculations:
+ * 		Timer Frequency = CPU Frequency / Prescaler
+ * 		Timer Instruction Time = 1 / Timer Frequency
+ * 		Total Number of Counts = (Required Time / Timer Instruction Time) - 1
+ *
+ *
+ * Inputs: No inputs.
+ * Outputs: No Outputs.
+ */
+void CTRL_ECU_init(void);
+
+/*
+ * [Function Name]: CTRL_ECU_newTimerTick
+ * [Function Description]: Function to be called by the ISR.
+ *
+ *
+ * Inputs: No inputs.
+ * Outputs: No Outputs.
+ */
+void CTRL_ECU_newTimerTick(void);
+
+/*
+ * [Function Name]: Delay
+ * [Function Description]: Function to make delay for certain time based on the interrupt time.
+ *
+ *
+ * Inputs: Number of interrupts to be delayed with.
+ * Outputs: No Outputs.
+ */
+void Delay(uint8 interruptsCount);
+
+/*
+ * [Function Name]: msDelay
+ * [Function Description]: Function to make delay for certain time based on the processor speed.
+ *
+ *
+ * Inputs: Number of milli seconds to delay with.
+ * Outputs: No Outputs.
+ */
+void msDelay(uint16 milliseconds);
+
+/*
+ * [Function Name]: recievePassword
+ * [Function Description]: Function to receive Array (Password) by UART.
+ *
+ *
+ * Inputs: Array of characters.
+ * Outputs: No Outputs. (modifying the array given to it)
+ */
+void recievePassword(uint8 *receivedPass);
+
+/*
+ * [Function Name]: checkPassword
+ * [Function Description]: Function to Check if the two given arrays are the same.
+ *
+ *
+ * Inputs: Two Arrays of characters.
+ * Outputs: returns uint8 equals one of two values: one represents Equality, and the other represents difference
+ */
+uint8 checkPassword(uint8 *str1, uint8 *str2);
+
+/*
+ * [Function Name]: savePassword
+ * [Function Description]: Function to save password of the Door Locker Security System.
+ *						   It saves the password in EEPROM External Peripheral.
+ *
+ * Inputs: No inputs (It manipulate global variables)
+ * Outputs: No Outputs. (Doesn't return any thing but it is using UART to send and receive data)
+ */
+void savePassword(void);
+
+/*
+ * [Function Name]: resetPassword
+ * [Function Description]: Function to reset the password of the Door Locker Security System.
+ *						   It saves the new password in EEPROM External Peripheral.
+ *
+ * Inputs: No inputs (It manipulate global variables)
+ * Outputs: No Outputs. (Doesn't return any thing but it is using UART to send and receive data)
+ */
+void resetPassword(void);
+
+/*
+ * [Function Name]: openDoor
+ * [Function Description]: Function responsible about Opening door of the locker.
+ *
+ *
+ * Inputs: No Inputs.
+ * Outputs: No Outputs.
+ */
+void openDoor(void);
+
+#endif /* CTRL_ECU_H_ */

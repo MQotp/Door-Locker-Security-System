@@ -1,0 +1,25 @@
+/*
+ * hmi_ecu.h
+ *
+ *  Created on: Oct 31, 2022
+ *      Author: Mahmoud Qotp
+ */
+
+#ifndef HMI_ECU_H_
+#define HMI_ECU_H_
+
+#include "std_types.h"
+
+
+
+
+
+void HMI_ECU_init(void);
+void setPassword(void);
+void HMI_ECU_newTimerTick(void);
+void Delay(uint8 interruptsCount);
+void sendPassword(uint8 *str);
+void HMI_getPassword(uint8 *str);
+void HMI_Open_Locker(void);
+void HMI_mainOptions(void);
+#endif /* HMI_ECU_H_ */

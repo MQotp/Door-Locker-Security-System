@@ -1,0 +1,289 @@
+/*
+ * ctrl_ecu.c
+ *
+ *  Created on: Oct 31, 2022
+ *      Author: Mahmoud Qotp
+ */
+
+/*******************************************************************************
+ *                                   Includes                                  *
+ *******************************************************************************/
+
+#include "gpio.h"
+#include "timer1.h"
+#include "dc_motor.h"
+#include "twi.h"
+#include "external_eeprom.h"
+#include "buzzer.h"
+#include "uart.h"
+#include "std_types.h"
+#include <avr/io.h>
+#include "ctrl_ecu.h"
+#include <util/delay.h>
+
+
+/*******************************************************************************
+ *                                Global Variables                             *
+ *******************************************************************************/
+uint8 g_Password[PASSWORD_SIZE];
+uint8 g_rePassword[PASSWORD_SIZE];
+uint8 g_checkPassword[PASSWORD_SIZE];
+uint8 g_falseAttempts = 0;
+uint8 pwMatched = PASSWORDS_ARE_MATCHED;
+
+
+/*******************************************************************************
+ *********************************     MAIN     ********************************
+ *******************************************************************************/
+int main(void)
+{
+	uint8 instruction;
+	CTRL_ECU_init();
+	savePassword();
+	while(1)
+	{
+		/*Receiving either Open_door symbol or Change_Password symbol.*/
+		instruction = UART_recieveByte();
+
+		if(instruction == OPEN_DOOR)
+		{
+			openDoor();
+		}
+
+		else if(instruction == CHANGE_PASSWORD)
+		{
+			resetPassword();
+		}
+	}
+}
+
+
+
+/*
+ * [Function Name]: CTRL_ECU_init
+ * [Function Description]: This Function should initialize the HMI ECU by Initializing all the peripherals
+ * 							it depends on by:
+ * 							1- initialize Buzzer
+ * 							2- define structure of type Timer1_ConfigType to initialize Timer1.
+ * 							3- define structure of type UART_ConfigType to initialize UART.
+ * 							4- Setting the call back function.
+ * 							5- Initialize TWI.
+ * 							6- Initialize DC Motor
+ * 							7- Enabling the interrupts.
+ *
+ * Interrupt each half second.
+ * Based On The next Calculations:
+ * 		Timer Frequency = CPU Frequency / Prescaler
+ * 		Timer Instruction Time = 1 / Timer Frequency
+ * 		Total Number of Counts = (Required Time / Timer Instruction Time) - 1
+ *
+ *
+ * Inputs: No inputs.
+ * Outputs: No Outputs.
+ */
+void CTRL_ECU_init(void)
+{
+	Timer1_ConfigType timer_Config = {TIMER_INITIAL_VALUE,TIMER_COMPARE_VALUE,F_CPU_256,COMPARE_MODE};
+	UART_ConfigType UART_Config = {CHARACTER_SIZE_8,NO_PARITY,STOP_BIT_1,UART_BAUD_RATE};
+	UART_init(&UART_Config);
+	TWI_ConfigType TWI_Config = {TWI_ADDRESS,TWI_BIT_RATE};
+	Timer1_setCallBack(CTRL_ECU_newTimerTick);
+	Buzzer_init();
+	DcMotor_Init();
+	Timer1_init(&timer_Config);
+	TWI_init(&TWI_Config);
+	SREG = (1<<7);
+}
+
+
+/*
+ * [Function Name]: CTRL_ECU_newTimerTick
+ * [Function Description]: Function to be called by the ISR.
+ *
+ *
+ * Inputs: No inputs.
+ * Outputs: No Outputs.
+ */
+void CTRL_ECU_newTimerTick(void)
+{
+	g_interruptCounter++;
+}
+
+/*
+ * [Function Name]: Delay
+ * [Function Description]: Function to make delay for certain time based on the interrupt time.
+ *
+ *
+ * Inputs: Number of interrupts to be delayed with.
+ * Outputs: No Outputs.
+ */
+void Delay(uint8 interruptsCount)
+{
+	g_interruptCounter = 0;
+	while(g_interruptCounter < interruptsCount);
+	g_interruptCounter = 0;
+}
+
+
+/*
+ * [Function Name]: recievePassword
+ * [Function Description]: Function to receive Array (Password) by UART.
+ *
+ *
+ * Inputs: Array of characters.
+ * Outputs: No Outputs. (modifying the array given to it)
+ */
+void recievePassword(uint8 *receivedPass) {
+	uint8 i;
+	for (i = 0; i < PASSWORD_SIZE; i++) {
+		receivedPass[i] = UART_recieveByte();
+	}
+}
+
+uint8 checkPassword(uint8 *str1, uint8 *str2)
+{
+	uint8 i = 0, flag = 0;
+	while(i < PASSWORD_SIZE)
+	{
+		if(str1[i] != str2[i])
+		{
+			flag = 1;
+			break;
+		}
+		i++;
+	}
+	if(flag == 1)
+	{
+		/*UART_sendByte(PASSWORDS_ARE_MISMATCHED);*/
+		return PASSWORDS_ARE_MISMATCHED;
+	}
+	else
+	{
+		/*UART_sendByte(PASSWORDS_ARE_MATCHED);*/
+		return PASSWORDS_ARE_MATCHED;
+	}
+}
+
+void savePassword(void){
+	uint8 passMatchStat = PASSWORDS_ARE_MISMATCHED;
+	uint8 i = 0;
+	while(passMatchStat != PASSWORDS_ARE_MATCHED)
+	{
+		while(UART_recieveByte() != SET_PASSWORD);
+
+		UART_sendByte(READY_TO_RECEIVE);
+		recievePassword(g_Password);
+
+		UART_sendByte(READY_TO_RECEIVE);
+		recievePassword(g_rePassword);
+
+		passMatchStat = checkPassword(g_Password,g_rePassword);
+
+		UART_sendByte(SENDING_STATUS);
+		UART_sendByte(passMatchStat);
+
+		if(passMatchStat == PASSWORDS_ARE_MATCHED)
+		{
+/*			EEPROM_writeString(PASSWORD_ADDRESS, g_Password);*/
+			i = 0;
+			while(g_Password[i] != '\0')
+			{
+				EEPROM_writeByte(PASSWORD_ADDRESS+i,g_Password[i]);
+				_delay_ms(10);
+				i++;
+			}
+			EEPROM_writeByte(PASSWORD_ADDRESS+i,'\0');
+		}
+	}
+
+}
+
+void resetPassword(void)
+{
+	uint8 count = 0;
+	pwMatched = PASSWORDS_ARE_MATCHED;
+	uint8 passChar;
+
+	while(UART_recieveByte() != SEND_PASSWORD);
+	recievePassword(g_checkPassword);
+
+	while(g_checkPassword[count] != '\0')
+	{
+		EEPROM_readByte(PASSWORD_ADDRESS+count,&passChar);
+		if(g_checkPassword[count] != passChar)
+		{
+			pwMatched = PASSWORDS_ARE_MISMATCHED;
+			break;
+		}
+		count++;
+	}
+	count = 0;
+
+	UART_sendByte(SENDING_STATUS);
+	UART_sendByte(pwMatched);
+
+	if(pwMatched == PASSWORDS_ARE_MATCHED)
+	{
+		g_falseAttempts = 0;
+		savePassword();
+	}
+	else if(pwMatched == PASSWORDS_ARE_MISMATCHED)
+	{
+		g_falseAttempts++;
+		if(g_falseAttempts == 3)
+		{
+			Buzzer_on();
+			Delay(BUZZER_TIME);
+			Buzzer_off();
+			g_falseAttempts = 0;
+		}
+	}
+}
+
+void openDoor(void)
+{
+	uint8 count = 0;
+	pwMatched = PASSWORDS_ARE_MATCHED;
+	uint8 passChar;
+
+	while(UART_recieveByte() != SEND_PASSWORD);
+	recievePassword(g_checkPassword);
+
+	while(g_checkPassword[count] != '\0')
+	{
+		EEPROM_readByte(PASSWORD_ADDRESS+count,&passChar);
+		if(g_checkPassword[count] != passChar)
+		{
+			pwMatched = PASSWORDS_ARE_MISMATCHED;
+			break;
+		}
+		count++;
+	}
+	count = 0;
+
+	UART_sendByte(SENDING_STATUS);
+	UART_sendByte(pwMatched);
+
+	if(pwMatched == PASSWORDS_ARE_MATCHED)
+	{
+		g_falseAttempts = 0;
+		DcMotor_Rotate(CW);
+		Delay(MOTOR_ROTATING_TIME);
+		DcMotor_Rotate(STOP);
+		Delay(HOLDING_TIME);
+		DcMotor_Rotate(ACW);
+		Delay(MOTOR_ROTATING_TIME);
+		DcMotor_Rotate(STOP);
+	}
+	else if(pwMatched == PASSWORDS_ARE_MISMATCHED)
+	{
+		g_falseAttempts++;
+		if(g_falseAttempts == 3)
+		{
+			Buzzer_on();
+			Delay(BUZZER_TIME);
+			Buzzer_off();
+			g_falseAttempts = 0;
+		}
+	}
+}
